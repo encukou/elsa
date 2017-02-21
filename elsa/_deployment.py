@@ -10,6 +10,7 @@ COMMIT_EMOJIS = [
     ':octocat:', ':gift_heart:', ':tada:', ':balloon:', ':cake:', ':rocket:',
 ]
 
+
 def run(cmd, **kwargs):
     """Same as ``subprocess.run``, but checks the result by default"""
     kwargs.setdefault('check', True)
