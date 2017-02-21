@@ -17,7 +17,7 @@ def run(cmd, **kwargs):
 
 
 def get_last_commit_info(format):
-    cmd = ['git', 'show', '--format', format, '--no-patch']
+    cmd = ['git', '--no-pager', 'show', '--format', format, '--no-patch']
     process = run(cmd, stdout=subprocess.PIPE)
     return process.stdout.strip()
 
