@@ -1,6 +1,7 @@
 import os
 import random
 import subprocess
+import sys
 
 COMMIT_EMOJIS = [
     ':sunglasses:', ':two_hearts:', ':sparkles:', ':star2:', ':star:',
@@ -34,7 +35,7 @@ def get_git_toplevel():
     return process.stdout.strip().decode('utf-8')
 
 
-def deploy(html_dir, *, remote, push):
+def deploy(html_dir, *, remote, push, show_err):
     """Deploy to GitHub pages, expects to be already frozen"""
     if os.environ.get('TRAVIS'):  # Travis CI
         print('Setting up git...')
@@ -48,20 +49,45 @@ def deploy(html_dir, *, remote, push):
 
     print('Rewriting gh-pages branch...')
     run(['git', 'branch', '-D', 'gh-pages'], check=False, quiet=True)
-    ref = '.git/refs/remotes/{}/gh-pages'.format(remote)
-    ref = os.path.join(get_git_toplevel(), ref)
-    if os.path.exists(ref):
-        os.remove(ref)
+
+    ref = 'refs/remotes/{}/gh-pages'.format(remote)
+
+    # When not pushing, we don't want to remove remote tracking branch
+    # But we need to, so we remember where it points to and then restore it
+    result = run(['git', 'rev-parse', ref], check=False,
+                 stdout=subprocess.PIPE)
+    if result.returncode == 0:
+        old_remote_head = result.stdout.decode('ascii').strip()
+    else:
+        old_remote_head = None
+
     commit_message = 'Deploying {}'.format(random.choice(COMMIT_EMOJIS))
-    run([
-        'ghp-import',
-        '-n',  # .nojekyll file
-        '-m', commit_message,
-        '-r', remote,
-        html_dir
-    ])
+    try:
+        run(['git', 'update-ref', '-d', ref], quiet=True)
+
+        run([
+            'ghp-import',
+            '-n',  # .nojekyll file
+            '-m', commit_message,
+            '-r', remote,
+            html_dir
+        ])
+    finally:
+        if not push and old_remote_head:
+            run(['git', 'update-ref', ref, old_remote_head], quiet=True)
 
     if push:
         print('Pushing to GitHub...')
-        run(['git', 'push', remote, 'gh-pages:gh-pages', '--force'],
-            quiet=True)
+        try:
+            run(['git', 'push', remote, 'gh-pages:gh-pages', '--force'],
+                quiet=not show_err)
+        except subprocess.CalledProcessError as e:
+            msg = 'Error: git push failed (exit status {}).'
+            if not show_err:
+                msg += ('\nNote: Due to security constraints, Elsa does not '
+                        'show the error message from git, as it may include '
+                        'sensitive information and this could be logged. Use '
+                        'the --show-git-push-stderr switch to change this '
+                        'behavior.')
+            print(msg.format(e.returncode), file=sys.stderr)
+            sys.exit(e.returncode)

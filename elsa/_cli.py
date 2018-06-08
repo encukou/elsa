@@ -1,4 +1,5 @@
 import os
+import sys
 import urllib.parse
 import warnings
 
@@ -59,12 +60,16 @@ def freeze_app(app, freezer, path, base_url):
     label = 'Generating HTML...'
     width = max(click.get_terminal_size()[0] // 6, 3)
 
-    with click.progressbar(freezer.freeze_yield(),
-                           item_show_func=_get_item_show_func(label, width),
-                           width=width,
-                           label=label) as urls:
-        for url in urls:
-            pass  # Frozen-Flask and click.progressbar doing all the hard work
+    try:
+        with click.progressbar(freezer.freeze_yield(),
+                            item_show_func=_get_item_show_func(label, width),
+                            width=width,
+                            label=label) as urls:
+            for url in urls:
+                pass  # Frozen-Flask and click.progressbar doing all the hard work
+    except flask_frozen.FrozenFlaskWarning as w:
+        print('Error:', w, file=sys.stderr)
+        sys.exit(1)
 
 
 def inject_cname(app):
@@ -75,8 +80,13 @@ def inject_cname(app):
                         mimetype='application/octet-stream')
 
 
-def cli(app, *, freezer=None, base_url=None):
-    """Get a cli() function for provided app"""
+def cli(app, *, freezer=None, base_url=None, invoke_cli=True):
+    """ Generates command-line interface for the provided app.
+
+    If ``invoke_cli`` is set to ``True`` (the default),
+    the cli is invoked right away,
+    otherwise it's returned so it can be used further.
+    """
     if not freezer:
         freezer = ShutdownableFreezer(app)
 
@@ -136,8 +146,12 @@ def cli(app, *, freezer=None, base_url=None):
     @click.option('--freeze/--no-freeze', default=True,
                   help='Whether to freeze the site before deploying, '
                   'default is to freeze')
+    @click.option('--show-git-push-stderr', is_flag=True,
+                  help='Show the stderr output of `git push` failure, '
+                       'might be dangerous if logs are public')
     @cname_option()
-    def deploy(path, base_url, remote, push, freeze, cname):
+    def deploy(path, base_url, remote, push, freeze,
+               show_git_push_stderr, cname):
         """Deploy the site to GitHub pages"""
         if push is None:
             warnings.simplefilter('always')
@@ -153,6 +167,9 @@ def cli(app, *, freezer=None, base_url=None):
                 inject_cname(app)
             freeze_app(app, freezer, path, base_url)
 
-        deploy_(path, remote=remote, push=push)
+        deploy_(path, remote=remote, push=push, show_err=show_git_push_stderr)
 
-    return command()
+    if invoke_cli:
+        return command()
+    else:
+        return command

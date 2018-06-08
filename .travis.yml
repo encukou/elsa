@@ -2,7 +2,8 @@ language: python
 python:
 - '3.5'
 - '3.6'
-- 'pypy3.5-5.8.0'
+- '3.7-dev'
+- 'pypy3.5-5.9.0'
 - 'nightly'
 dist: trusty
 matrix:
@@ -14,7 +15,6 @@ matrix:
       env:
       - TRAVIS_PYTHON_VERSION: 3.6
   allow_failures:
-    - os: osx
     - python: nightly
   fast_finish: true
 cache:
@@ -25,7 +25,7 @@ cache:
 install: |
   if [[ $TRAVIS_OS_NAME == 'osx' ]]; then
       brew update;
-      brew install python3;
+      brew upgrade python;
       python3 -m pip install --upgrade tox tox-travis
   else
       pip install --upgrade tox tox-travis
